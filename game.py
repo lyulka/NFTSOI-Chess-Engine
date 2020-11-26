@@ -1,5 +1,7 @@
-from chessboard import *
-
+from chessboard import Chessboard
+from coord import Coord
+from move import Move
+from test import dynamic_move_test
 class AI:
   def __init__(self, color: str):
     self.color = color
@@ -94,12 +96,15 @@ class Game:
 
       from_coord = Coord(a_n=from_square)
       to_coord = Coord(a_n=to_square)
+      move = Move(from_coord, to_coord)
 
-      is_valid, reason = Move.is_valid(self.board, self.color, from_coord, to_coord)
+      dynamic_move_test(self.board, self.board.piece_in(from_coord), 
+        self.color, from_coord)
+
+      is_valid = Move.is_valid(self.board, self.color, move)
 
       if (not is_valid):
         print("That was a nonsensical move.")
-        print(reason)
         continue
 
       move = Move(from_coord, to_coord)

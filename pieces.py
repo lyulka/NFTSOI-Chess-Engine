@@ -1,4 +1,5 @@
-from chessboard import *
+from move import Move
+from coord import Coord
 
 class Empty:
   def __str__(self):
@@ -8,10 +9,16 @@ class Piece:
   def __init__(self, color):
     self.color = color
 
-  def is_enemy(self, other: Piece):
+  def is_enemy(self, other: 'Piece'):
+    if type(other) == Empty:
+      return False
+
     return self.color != other.color
 
-  def is_friend(self, other: Piece):
+  def is_friend(self, other: 'Piece'):
+    if type(other) == Empty:
+      return False
+
     return self.color == other.color
 
 class Pawn(Piece):
@@ -22,7 +29,7 @@ class Pawn(Piece):
   # Valid move generation is used strictly to generate moves
   # for the AI player. The validity of moves inputted by the
   # human player is checked in Move.is_valid.
-  def valid_moves(self, board: Chessboard, from_c: Coord):
+  def valid_moves(self, board: 'Chessboard', from_c: 'Coord'):
     moves = []
 
     if self.color == 'w':
@@ -32,19 +39,19 @@ class Pawn(Piece):
         and board.empty_in(Coord(4, from_c.x))):
         moves.append(Move(from_c, Coord(4, from_c.x))) # Move forward 2 steps
 
-      if board.empty_in(Coord(5, from_c.x)):
-        moves.append(Move(from_c, Coord(5, from_c.x))) # Move forward 1 step
+      if board.empty_in(Coord(from_c.y + 1, from_c.x)):
+        moves.append(Move(from_c, Coord(from_c.y - 1, from_c.x))) # Move forward 1 step
 
-      # Attacking south-west
-      t_y, t_x = from_c.y + 1, from_c.x - 1
+      # Attacking north-west
+      t_y, t_x = from_c.y - 1, from_c.x - 1
       if (Coord.is_in_bounds(t_y, t_x)
-        and board.piece_in(Coord(t_y, t_x).is_enemy(self))):
+        and self.is_enemy(board.piece_in(Coord(t_y, t_x)))):
         moves.append(Move(from_c, Coord(t_y, t_x)))
       
-      # Attacking south-east
-      t_y, t_x = from_c.y + 1, from_c.x + 1
+      # Attacking north-east
+      t_y, t_x = from_c.y - 1, from_c.x + 1
       if (Coord.is_in_bounds(t_y, t_x)
-        and board.piece_in(Coord(t_y, t_x).is_enemy(self))):
+        and self.is_enemy(board.piece_in(Coord(t_y, t_x)))):
         moves.append(Move(from_c, Coord(t_y, t_x)))
 
     else: # self.color == 'b'
@@ -53,19 +60,19 @@ class Pawn(Piece):
         and board.empty_in(Coord(3, from_c.x))):
         moves.append(Move(from_c, Coord(3, from_c.x)))
 
-      if board.empty_in(Coord(2, from_c.x)):
-        moves.append(Move(from_c, Coord(2, from_c.x)))
+      if board.empty_in(Coord(from_c.y - 1, from_c.x)):
+        moves.append(Move(from_c, Coord(from_c.y + 1, from_c.x)))
 
-      # Attacking north-west
-      t_y, t_x = from_c.y - 1, from_c.x - 1
+      # Attacking south-west
+      t_y, t_x = from_c.y + 1, from_c.x - 1
       if (Coord.is_in_bounds(t_y, t_x)
-        and board.piece_in(Coord(t_y, t_x).is_enemy(self))):
+        and self.is_enemy(board.piece_in(Coord(t_y, t_x)))):
         moves.append(Move(from_c, Coord(t_y, t_x)))
       
-      # Attacking north-east
-      t_y, t_x = from_c.y - 1, from_c.x + 1
+      # Attacking south-east
+      t_y, t_x = from_c.y + 1, from_c.x + 1
       if (Coord.is_in_bounds(t_y, t_x)
-        and board.piece_in(Coord(t_y, t_x)).is_enemy(self)):
+        and self.is_enemy(board.piece_in(Coord(t_y, t_x)))):
         moves.append(Move(from_c, Coord(t_y, t_x)))
 
     return moves 
@@ -76,7 +83,7 @@ class Knight(Piece):
     if self.color == 'b': return u'\u2658'
     return u'\u265e'
 
-  def valid_moves(self, board: Chessboard, from_c: Coord):
+  def valid_moves(self, board: 'Chessboard', from_c: 'Coord'):
     moves = []
 
     # Enumerating possible moves clockwise, starting from North
@@ -92,7 +99,8 @@ class Knight(Piece):
     )
 
     for t_y, t_x in possible_targets:
-      if (Coord.is_in_bounds(t_y, t_x)):
+      if (Coord.is_in_bounds(t_y, t_x)
+        and (board.empty_in(Coord(t_y, t_x)) or board.piece_in(Coord(t_y, t_x)).is_enemy(self))):
         moves.append(Move(from_c, Coord(t_y, t_x)))
 
     return moves
@@ -102,7 +110,7 @@ class Bishop(Piece):
     if self.color == 'b': return u'\u2657'
     return u'\u265d'
 
-  def valid_moves(self, board: Chessboard, from_c: Coord):
+  def valid_moves(self, board: 'Chessboard', from_c: 'Coord'):
     moves = []
 
     offsets = (
@@ -112,8 +120,9 @@ class Bishop(Piece):
       (-1, -1), # Move north-west
     )
 
-    t_y, t_x = from_c.y, from_c.x
     for offset in offsets:
+      t_y, t_x = from_c.y, from_c.x
+
       while True:
         t_y, t_x = t_y + offset[0], t_x + offset[1]
         
@@ -124,6 +133,11 @@ class Bishop(Piece):
         t_c = Coord(t_y, t_x)
         move = Move(from_c, t_c)
 
+        # Nobody here
+        if board.empty_in(t_c):
+          moves.append(move)
+          continue
+
         # Bump into enemy
         if board.piece_in(t_c).is_enemy(self):
           moves.append(move)
@@ -133,15 +147,14 @@ class Bishop(Piece):
         if board.piece_in(t_c).is_friend(self):
           break
 
-        # Didn't bump into anything
-        moves.append(move)
+    return moves
 
 class Rook(Piece):
   def __str__(self):
     if self.color == 'b': return u'\u2656'
     return u'\u265c'
 
-  def valid_moves(self, board: Chessboard, from_c: Coord):
+  def valid_moves(self, board: 'Chessboard', from_c: 'Coord'):
     moves = []
 
     offsets = (
@@ -152,6 +165,8 @@ class Rook(Piece):
     )
 
     for offset in offsets:
+      t_y, t_x = from_c.y, from_c.x
+
       while True:
         t_y, t_x = t_y + offset[0], t_x + offset[1]
         
@@ -162,6 +177,11 @@ class Rook(Piece):
         t_c = Coord(t_y, t_x)
         move = Move(from_c, t_c)
 
+        # Nobody here
+        if board.empty_in(t_c):
+          moves.append(move)
+          continue
+
         # Bump into enemy
         if board.piece_in(t_c).is_enemy(self):
           moves.append(move)
@@ -171,9 +191,6 @@ class Rook(Piece):
         if board.piece_in(t_c).is_friend(self):
           break
 
-        # Didn't bump into anything
-        moves.append(move)
-
     return moves
 
 class Queen(Piece):
@@ -181,7 +198,7 @@ class Queen(Piece):
     if self.color == 'b': return u'\u2655'
     return u'\u265b'
 
-  def valid_moves(self, board: Chessboard, from_c: Coord):
+  def valid_moves(self, board: 'Chessboard', from_c: 'Coord'):
     dummy_bishop = Bishop(self.color)
     dummy_rook = Rook(self.color)
 
@@ -196,7 +213,7 @@ class King(Piece):
     if self.color == 'b': return u'\u2654'
     return u'\u265a'
 
-  def valid_moves(self, board: Chessboard, from_c: Coord):
+  def valid_moves(self, board: 'Chessboard', from_c: 'Coord'):
     moves = []
 
     # Enumerating possible moves clockwise, starting from north
@@ -212,7 +229,8 @@ class King(Piece):
     )
 
     for t_y, t_x in possible_targets:
-      if (Coord.is_in_bounds(t_y, t_x)):
+      if (Coord.is_in_bounds(t_y, t_x)
+        and (board.empty_in(Coord(t_y, t_x)) or board.piece_in(Coord(t_y, t_x)).is_enemy(self))):
         moves.append(Move(from_c, Coord(t_y, t_x)))
 
     return moves
