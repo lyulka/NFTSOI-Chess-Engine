@@ -13,8 +13,15 @@ class Pawn(Piece):
     if self.color == 'b': return u'\u2659'
     return u'\u265f'
 
-  def valid_moves(self, coords: tuple):
-    res = []
+  # Valid move generation is used strictly to generate moves
+  # for the AI player. The validity of moves inputted by the
+  # human player is checked in Move.is_valid.
+  # def valid_moves(self, coords: tuple):
+  #   res = []
+
+  #   # The pawn is in its starting position.
+  #   if (coords[1] == 1 or coords[1] )
+
 
 class Knight(Piece):
   def __str__(self):

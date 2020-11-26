@@ -87,14 +87,22 @@ class Game:
       from_square = input("Piece: ").lower()
       to_square = input("To: ").lower()
 
-      is_valid, reason = Move.is_valid(self.board, self.color, from_square, to_square)
+      if (not Coord.is_in_bounds(a_n=from_square)
+        or not Coord.is_in_bounds(a_n=to_square)):
+        print("You are going out of bounds with those coordinates!")
+        continue
+
+      from_coord = Coord(a_n=from_square)
+      to_coord = Coord(a_n=to_square)
+
+      is_valid, reason = Move.is_valid(self.board, self.color, from_coord, to_coord)
 
       if (not is_valid):
         print("That was a nonsensical move.")
         print(reason)
         continue
 
-      move = Move(from_square, to_square)
+      move = Move(from_coord, to_coord)
       new_position = self.board.make_move(move)
 
       # if (not new_position.is_check()):

@@ -121,10 +121,32 @@ PIECE_SQUARE_TABLES = {
   ],
 }
 
+class Coord:
+  def __init__(self, y: int=None, x: int=None, a_n: str=None):
+    if (a_n is not None):
+      self.y, self.x = NOTATION_TO_COORDS[a_n]
+    else:      
+      self.y = y
+      self.x = x
+
+  def __eq__(self, other):
+    return self.y == other.y and self.x == other.x
+
+  @staticmethod
+  def is_in_bounds(y: int=None, x: int=None, a_n: str=None):
+    if (a_n is not None):
+      return a_n in NOTATION_TO_COORDS
+
+    elif (y is not None and x is not None):
+      return 0 <= y <= 7 and 0 <= x <= 7
+
+    else:
+      return False
+    
 class Move:
-  def __init__(self, from_square: str, to_square: str):
-    self.from_coord = NOTATION_TO_COORDS[from_square]
-    self.to_coord = NOTATION_TO_COORDS[to_square]
+  def __init__(self, from_coord: Coord, to_coord):
+    self.from_coord = from_coord
+    self.to_coord = to_coord
 
   """
   The CPU player does not need this method.
@@ -134,17 +156,9 @@ class Move:
   - TODO: if the chess piece cannot make such a move.
   """
   @staticmethod
-  def is_valid(board: 'Chessboard', color: str, from_square: str, to_square: str):
-    from_coord = NOTATION_TO_COORDS.get(from_square, False)
-    to_coord = NOTATION_TO_COORDS.get(to_square, False)
-
-    # Why?
-    if from_square == to_square:
-      return False, "You cannot not move a piece!"
-
-    # Out of bounds
-    if (not from_coord or not to_coord):
-      return False, "You're going out of bounds!"
+  def is_valid(board: 'Chessboard', color: str, from_coord: Coord, to_coord: Coord):
+    if from_coord == to_coord:
+      return False, "From and to should be different!"
 
     source_piece = board.piece_in(from_coord)
     target_piece = board.piece_in(to_coord)
@@ -160,30 +174,29 @@ class Move:
     
     if type(source_piece) == Pawn:
       if color == 'w':
+
         # Attacking move
         if not board.empty_in(to_coord) and color != target_piece.color:
-          # An attacking white pawn can move horizontally by 1 square
-          # And move vertically in the negative vertical direction by 1 square
-          if (abs(to_coord[1] - from_coord[1]) == 1
-            and to_coord[0] - from_coord[0] == -1):
+          
+          # An attacking white pawn
+          if (abs(to_coord.x - from_coord.x) == 1
+            and to_coord.y - from_coord.y == -1):
             return True, None
+
         # Non-attacking move
-        else:                                              
+        else:         
+
           # A non-attacking white pawn in its starting position
-          # can move 1 or 2 squares forward
-          # but cannot move horizontally
-          # And it cannot jump over an occupied spot.
-          if (from_coord[0] == 6                          
-            and (to_coord[0] == 5 or to_coord[0] == 4)
-            and to_coord[1] - from_coord[1] == 0
+          if (from_coord.y == 6                          
+            and (to_coord.y == 5 or to_coord.y == 4)
+            and to_coord.x - from_coord.x == 0
             and board.empty_in(to_coord)):
             return True, None
+
           # A non-attacking white pawn not in its starting position
-          # can move exactly 1 square forward
-          # but cannot move horizontally
-          if (from_coord[0] != 6                          
-            and (to_coord[0] - from_coord[0] == -1)
-            and to_coord[1] - from_coord[1] == 0):
+          if (from_coord.y != 6                          
+            and (to_coord.y - from_coord.y == -1)
+            and to_coord.x - from_coord.x == 0):
             return True, None
 
         return False, "Your pawn cannot move like that!"
@@ -191,26 +204,24 @@ class Move:
       else: # color == 'b'
         # Attacking move
         if not board.empty_in(to_coord) and color != target_piece.color:        
-          # An attacking white pawn can move horizontally by 1 square
-          # And move vertically in the positive vertical direction by 1 square
-          if (abs(to_coord[1] - from_coord[1]) == 1
-            and to_coord[0] - from_coord[0] == 1):
+          
+          # An attacking black pawn
+          if (abs(to_coord.x - from_coord.x) == 1
+            and to_coord.y - from_coord.y == 1):
             return True, None     
         # Non-attacking move
         else:
-          # A non-attacking white pawn in its starting position
-          # can move 1 or 2 squares forward
-          # but cannot move horizontally
-          if (from_coord[0] == 1                          
-            and (to_coord[0] == 2 or to_coord[0] == 3)
-            and to_coord[1] - from_coord[1] == 0):
+
+          # A non-attacking black pawn in its starting position
+          if (from_coord.y == 1                          
+            and (to_coord.y == 2 or to_coord.y == 3)
+            and to_coord.x - from_coord.x == 0):
             return True, None
-          # A non-attacking white pawn not in its starting position
-          # can move exactly 1 square forward
-          # but cannot move horizontally
-          if (from_coord[0] != 1                          
-            and (to_coord[0] - from_coord[0] == 1)
-            and to_coord[1] - from_coord[1] == 0):
+
+          # A non-attacking black pawn not in its starting position
+          if (from_coord.y != 1                          
+            and (to_coord.y - from_coord.y == 1)
+            and to_coord.x - from_coord.x == 0):
             return True, None
 
         return False, "Your pawn cannot move like that!"
@@ -220,26 +231,27 @@ class Move:
     elif type(source_piece) == Knight:
 
       # Vertical L
-      if (abs(to_coord[0] - from_coord[0]) == 2
-        and abs(to_coord[1] - from_coord[1]) == 1):
+      if (abs(to_coord.y - from_coord.y) == 2
+        and abs(to_coord.x - from_coord.x) == 1):
         return True, None
+
       # Horizontal L
-      if (abs(to_coord[0] - from_coord[0]) == 1
-        and abs(to_coord[1] - from_coord[1]) == 2):
+      if (abs(to_coord.y - from_coord.y) == 1
+        and abs(to_coord.x - from_coord.x) == 2):
         return True, None
     
       return False, "Your knight cannot move like that!"
 
     # A bishop is a slider, so we must traverse the path between from_square
-    # to to_swaure, checking if there is something blocking the way.
+    # to to_square, checking if there is something blocking the way.
     elif type(source_piece) == Bishop:
 
       # If Bishop's movement is not a perfect diagonal: False
-      if abs(to_coord[0] - from_coord[0]) - abs(to_coord[1] - from_coord[1]) != 0:
+      if abs(to_coord.y - from_coord.y) - abs(to_coord.x - from_coord.x) != 0:
         return False, "Bishops can only move diagonally!"
 
-      for y, x in zip(range(from_coord[0], to_coord[0]), range(from_coord[1]), to_coord[1]):
-        if not board.empty_in((y, x)) and y != from_coord[0]:
+      for y, x in zip(range(from_coord.y, to_coord.y), range(from_coord.x), to_coord.x):
+        if not board.empty_in(Coord(y, x)) and y != from_coord.y:
           return False, "Your bishop bumped into an impenetrable wall!"
 
       return True, None
@@ -247,18 +259,21 @@ class Move:
     # A rook is a slider.  
     elif type(source_piece) == Rook:
 
-      vert = abs(to_coord[0] - from_coord[0])
-      horz = abs(to_coord[1] - from_coord[1])
+      vert = abs(to_coord.y - from_coord.y)
+      horz = abs(to_coord.x - from_coord.x)
+
       # If Rook's movement is not a straight line:
       if vert != 0 and horz != 0:
         return False, "Rooks can only move in one direction!"
+      
       if vert:
-        for y in range(from_coord[0], to_coord[0]):
-          if not board.empty_in((y, from_coord[1])) and y != from_coord[0]:
+        for y in range(from_coord.y, to_coord.y):
+          if not board.empty_in(Coord(y, from_coord.x)) and y != from_coord.y:
             return False, "Your Rook bumped into an impenetrable wall!"
+      
       else: # horz  
-        for x in range(from_coord[1], to_coord[1]):
-          if not board.empty_in((from_coord[0], x)) and x != from_coord[1]:
+        for x in range(from_coord.x, to_coord.x):
+          if not board.empty_in(Coord(from_coord.y, x)) and x != from_coord.x:
             return False, "Your Rook bumped into an impenetrable wall!"
       
       return True, None
@@ -266,23 +281,27 @@ class Move:
     # A queen is a slider
     elif type(source_piece) == Queen:
 
-      vert = abs(to_coord[0] - from_coord[0])
-      horz = abs(to_coord[1] - from_coord[1])
+      vert = abs(to_coord.y - from_coord.y)
+      horz = abs(to_coord.x - from_coord.x)
+      
       # If Queen's movement is not a straight line:
       if vert != 0 and horz != 0 and vert != horz:
         return False, "Your Queen can only move in a straight line!"
+      
       if vert == 0:
-        for x in range(from_coord[1], to_coord[1]):
-          if not board.empty_in((from_coord[0], x)) and x != from_coord[1]:
+        for x in range(from_coord.x, to_coord.x):
+          if not board.empty_in(Coord(from_coord.y, x)) and x != from_coord.x:
             return False, "Your Queen bumped into an impenetrable wall!"
+      
       elif horz == 0:
-        for y in range(from_coord[0], to_coord[0]):
-          if not board.empty_in((y, from_coord[1])) and y != from_coord[0]:
+        for y in range(from_coord.y, to_coord.y):
+          if not board.empty_in(Coord(y, from_coord.x)) and y != from_coord.y:
             return False, "Your Queen bumped into an impenetrable wall!"
+      
       # Perfect diagonal
       else:
-        for y, x in zip(range(from_coord[0], to_coord[0]), range(from_coord[1]), to_coord[1]):
-          if not board.empty_in((y, x)) and y != from_coord[0]:
+        for y, x in zip(range(from_coord.y, to_coord.y), range(from_coord.x), to_coord.x):
+          if not board.empty_in(Coord(y, x)) and y != from_coord.y:
             return False, "Your Queen bumped into an impenetrable wall!"
 
       return True, None
@@ -291,9 +310,10 @@ class Move:
     # A King can only move one tile, so no path checking needed.
     else: 
 
-      if abs(to_coord[0] - from_coord[0]) > 1:
+      if abs(to_coord.y - from_coord.y) > 1:
         return False, "Your King can only move 1 tile per turn!"
-      if abs(to_coord[1] - from_coord[1]) > 1:
+      
+      if abs(to_coord.x - from_coord.x) > 1:
         return False, "Your King can only move 1 tile per turn!"
 
       return True, None
@@ -310,11 +330,11 @@ class Chessboard:
     self.b_king_coords = b_king_coords
     self.last_move = None
 
-  def piece_in(self, coord: tuple):
-    return self.board[coord[0]][coord[1]]
+  def piece_in(self, coord: Coord):
+    return self.board[coord.y][coord.x]
 
-  def empty_in(self, coord: tuple):
-    return type(self.board[coord[0]][coord[1]]) == Empty
+  def empty_in(self, coord: Coord):
+    return type(self.board[coord.y][coord.x]) == Empty
 
   """
   By default, black is rendered on top, white on bottom.
@@ -336,9 +356,9 @@ class Chessboard:
     else:
       for y in range(start, end, step):
         for x in range(start, end, step):
-          if (y, x) == last_move.from_coord:
+          if Coord(y, x) == last_move.from_coord:
             res += f"{Ccolor.OKBLUE}{self.board[y][x]}{Ccolor.ENDC} "
-          elif (y, x) == last_move.to_coord:
+          elif Coord(y, x) == last_move.to_coord:
             res += f"{Ccolor.WARNING}{self.board[y][x]}{Ccolor.ENDC} "
           else:
             res += f"{self.board[y][x]} "
@@ -396,7 +416,7 @@ class Chessboard:
 
   Last move was legal if it does not place P King under a check.
   """
-  def is_check(self, color):
+  # def is_check(self, color):
     # Replace P King with P Pawn. Generate all moves for P Pawn.
     # If move causes Pawn to take: E Queen or E Bishop or E Pawn, return False.
 
@@ -430,28 +450,57 @@ class Chessboard:
   their King in check, is_double_check whether the enemy player's last
   move puts the current player in check.
   """
-  def is_double_check(self, last_move):
+  # def is_double_check(self, last_move):
 
   def evaluate(self):
+    aggregate_value = 0
     
-    
+    # Static piece value evaluations
+    for piece_type, quantity in self.inventory.items():
+      aggregate_value += PIECE_VALUE[piece_type]
+
+    # Bishop pair bonus
+    if self.inventory[Bishop] == 2:
+      aggregate_value += PIECE_VALUE['BISHOP_PAIR_BONUS']
+
+    # Positional value evaluations
+    for y in range(8):
+      for x in range(8): 
+        if (self.empty_in((y,x))):
+          continue
+        
+        piece = self.piece_in((y, x))
+
+        # White maximizes
+        if (piece.color == 'w'):
+          aggregate_value += PIECE_SQUARE_TABLES[type(piece)][y][x]
+
+        # Black minimizes
+        else:
+          # abs(y - 7) to 'vertical flip' PST.
+          # If Black's pawn is in (4, 3) for example, we should index into
+          # PST[Pawn][3][3] == 15, not PST[Pawn][4][3] == 10.
+          aggregate_value -= PIECE_SQUARE_TABLES[type(piece)][abs(y - 7)][x]
+
+    return aggregate_value
+      
   def make_move(self, move: Move):
     new_position = copy.deepcopy(self)
     new_position.last_move = move
 
     # No attack
     if new_position.empty_in(move.to_coord):
-      new_position.board[move.from_coord[0]][move.from_coord[1]], \
-      new_position.board[move.to_coord[0]][move.to_coord[1]] =    \
-      new_position.board[move.to_coord[0]][move.to_coord[1]],     \
-      new_position.board[move.from_coord[0]][move.from_coord[1]]
+      new_position.board[move.from_coord.y][move.from_coord.x], \
+      new_position.board[move.to_coord.y][move.to_coord.x] =    \
+      new_position.board[move.to_coord.y][move.to_coord.x],     \
+      new_position.board[move.from_coord.y][move.from_coord.x]
     
     # Attack move
     else:
       self.inventory[type(new_position.piece_in(move.to_coord))] -= 1
-      new_position.board[move.to_coord[0]][move.to_coord[1]] = \
-      new_position.board[move.from_coord[0]][move.from_coord[1]]
-      new_position.board[move.from_coord[0]][move.from_coord[1]] = Empty()
+      new_position.board[move.to_coord.y][move.to_coord.x] = \
+      new_position.board[move.from_coord.y][move.from_coord.x]
+      new_position.board[move.from_coord.y][move.from_coord.x] = Empty()
 
     # If either King is moved, update his position.
     moved = new_position.piece_in(move.to_coord)
