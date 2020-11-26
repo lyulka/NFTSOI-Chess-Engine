@@ -39,7 +39,7 @@ class Pawn(Piece):
         and board.empty_in(Coord(4, from_c.x))):
         moves.append(Move(from_c, Coord(4, from_c.x))) # Move forward 2 steps
 
-      if board.empty_in(Coord(from_c.y + 1, from_c.x)):
+      if board.empty_in(Coord(from_c.y - 1, from_c.x)):
         moves.append(Move(from_c, Coord(from_c.y - 1, from_c.x))) # Move forward 1 step
 
       # Attacking north-west
@@ -60,7 +60,7 @@ class Pawn(Piece):
         and board.empty_in(Coord(3, from_c.x))):
         moves.append(Move(from_c, Coord(3, from_c.x)))
 
-      if board.empty_in(Coord(from_c.y - 1, from_c.x)):
+      if board.empty_in(Coord(from_c.y + 1, from_c.x)):
         moves.append(Move(from_c, Coord(from_c.y + 1, from_c.x)))
 
       # Attacking south-west

@@ -2,6 +2,12 @@ from chessboard import Chessboard
 from coord import Coord
 from move import Move
 from test import dynamic_move_test
+
+LONGFORM_COLOR = {
+  'w': 'White',
+  'b': 'Black'
+}
+
 class AI:
   def __init__(self, color: str):
     self.color = color
@@ -12,16 +18,18 @@ class AI:
   White is the maximizer.
   Black is the minimizer. 
   """
-  def get_best_move(self, board: Chessboard, color: str, 
-    depth: int, alpha: float=float("-inf"), beta: float=float("+inf")):
-    if depth == 5: # Depth limit
-      return (board.evaluate(), None)
+  def get_best_move(self, board: Chessboard, color,
+    depth: int=0, alpha: float=float("-inf"), beta: float=float("+inf")):
+    if depth == 4: # Depth limit
+      return board.evaluate(), None
     else:
 
       if color == "w":
         best_move = None
-        for successor_position in board.legal_positions():
-          score, move = self.get_best_move(successor_position, color, depth + 1, alpha, beta)
+        for move in board.legal_moves(color):
+          successor_position = board.make_move(move)
+          score, _ = self.get_best_move(successor_position, "b",
+            depth + 1, alpha, beta)
           
           # Move that Black would take in response to this move has higher
           # score than the previous score assured for White.
@@ -39,10 +47,12 @@ class AI:
         
         return (alpha, best_move)
 
-      else: # self.color == "b":
+      else: # color:
         best_move = None
-        for successor_position in board.legal_positions():
-          score, move = self.get_best_move(successor_position, color, depth + 1, alpha, beta)
+        for move in board.legal_moves(color):
+          successor_position = board.make_move(move)
+          score, _ = self.get_best_move(successor_position, "w",
+            depth + 1, alpha, beta)
 
           # Move that White would take in response to this move has lower
           # score than the previous score assured for Black.
@@ -59,11 +69,10 @@ class AI:
 
         return (beta, best_move)
 
-
 class Game:
   def __init__(self):
     self.board = Chessboard()
-    self.color = None
+    self.human_color = None
     self.AI = None
     
     # Stores sequence of moves made from start to finish.
@@ -74,15 +83,17 @@ class Game:
 
   def start(self):
     print("Prince's Chess v0.1")
-    self.color = input("Choose your color (B or W): ").lower()
-    self.AI = AI('w' if self.color == 'b' else 'b')
+    self.human_color = input("Choose your color (B or W): ").lower()
+    self.AI = AI('w' if self.human_color == 'b' else 'b')
     
     # Render player's side at the bottom
-    vertical_flip = self.color == 'b'
+    vertical_flip = self.human_color == 'b'
     
-    while (not self.board.get_victor()):
+    while True:
 
-      # Player's turn
+      #
+      # PLAYER'S TURN
+      #
       self.board.print_board(self.moves[-1], vertical_flip=vertical_flip)
 
       print("Enter a move")
@@ -99,9 +110,9 @@ class Game:
       move = Move(from_coord, to_coord)
 
       dynamic_move_test(self.board, self.board.piece_in(from_coord), 
-        self.color, from_coord)
+        self.human_color, from_coord)
 
-      is_valid = Move.is_valid(self.board, self.color, move)
+      is_valid = Move.is_valid(self.board, self.human_color, move)
 
       if (not is_valid):
         print("That was a nonsensical move.")
@@ -110,20 +121,30 @@ class Game:
       move = Move(from_coord, to_coord)
       new_position = self.board.make_move(move)
 
-      # if (not new_position.is_check()):
-      #   print("That was an illegal move.")
-      #   continue
+      if new_position.is_check(self.human_color):
+        print("That was an illegal move.")
+        continue
       
       self.moves.append(move)
       self.board = new_position
 
-      
-      # AI's turn
-      # self.board.print_board(self.moves[-1], vertical_flip=vertical_flip)
-      # print("AI is thinking...")
+      if self.board.is_checkmate(self.AI.color):
+        print(f"{LONGFORM_COLOR[self.human_color]} Wins! You win!")
+        break
 
-      # move = self.AI.get_best_move(self.board)
-      # new_position = self.board.make_move(move)
+      #
+      # AI's TURN
+      #
+      self.board.print_board(self.moves[-1], vertical_flip=vertical_flip)
+      print("AI is thinking...")
+
+      _, move = self.AI.get_best_move(self.board, self.AI.color, 0)
+      print(move)
+      self.board = self.board.make_move(move)
+
+
+      if self.board.is_checkmate(self.human_color):
+        print(f"{LONGFORM_COLOR[self.AI]} Wins! AI wins!")
 
 g = Game()
 g.start()
