@@ -189,8 +189,8 @@ class Move:
           # A non-attacking white pawn in its starting position
           if (from_coord.y == 6                          
             and (to_coord.y == 5 or to_coord.y == 4)
-            and to_coord.x - from_coord.x == 0
-            and board.empty_in(to_coord)):
+            and to_coord.x == from_coord.x
+            and board.empty_in(Coord(5, from_coord.x))):
             return True, None
 
           # A non-attacking white pawn not in its starting position
@@ -215,7 +215,8 @@ class Move:
           # A non-attacking black pawn in its starting position
           if (from_coord.y == 1                          
             and (to_coord.y == 2 or to_coord.y == 3)
-            and to_coord.x - from_coord.x == 0):
+            and to_coord.x == from_coord.x
+            and board.empty_in(Coord(2, from_coord.x))):
             return True, None
 
           # A non-attacking black pawn not in its starting position
@@ -247,10 +248,11 @@ class Move:
     elif type(source_piece) == Bishop:
 
       # If Bishop's movement is not a perfect diagonal: False
-      if abs(to_coord.y - from_coord.y) - abs(to_coord.x - from_coord.x) != 0:
+      if abs(to_coord.y - from_coord.y) != abs(to_coord.x - from_coord.x):
         return False, "Bishops can only move diagonally!"
 
-      for y, x in zip(range(from_coord.y, to_coord.y), range(from_coord.x), to_coord.x):
+      for y, x in zip(range(from_coord.y, to_coord.y, -1 if from_coord.y > to_coord.y else 1),
+        range(from_coord.x, to_coord.x, -1 if from_coord.x > to_coord.x else 1)):
         if not board.empty_in(Coord(y, x)) and y != from_coord.y:
           return False, "Your bishop bumped into an impenetrable wall!"
 
@@ -267,12 +269,12 @@ class Move:
         return False, "Rooks can only move in one direction!"
       
       if vert:
-        for y in range(from_coord.y, to_coord.y):
+        for y in range(from_coord.y, to_coord.y, -1 if from_coord.y > to_coord.y else 1):
           if not board.empty_in(Coord(y, from_coord.x)) and y != from_coord.y:
             return False, "Your Rook bumped into an impenetrable wall!"
       
       else: # horz  
-        for x in range(from_coord.x, to_coord.x):
+        for x in range(from_coord.x, to_coord.x, -1 if from_coord.x > to_coord.x else 1):
           if not board.empty_in(Coord(from_coord.y, x)) and x != from_coord.x:
             return False, "Your Rook bumped into an impenetrable wall!"
       
@@ -289,18 +291,19 @@ class Move:
         return False, "Your Queen can only move in a straight line!"
       
       if vert == 0:
-        for x in range(from_coord.x, to_coord.x):
+        for x in range(from_coord.x, to_coord.x, -1 if from_coord.x > to_coord.x else 1):
           if not board.empty_in(Coord(from_coord.y, x)) and x != from_coord.x:
             return False, "Your Queen bumped into an impenetrable wall!"
       
       elif horz == 0:
-        for y in range(from_coord.y, to_coord.y):
+        for y in range(from_coord.y, to_coord.y, -1 if from_coord.y > to_coord.x else 1):
           if not board.empty_in(Coord(y, from_coord.x)) and y != from_coord.y:
             return False, "Your Queen bumped into an impenetrable wall!"
       
       # Perfect diagonal
       else:
-        for y, x in zip(range(from_coord.y, to_coord.y), range(from_coord.x), to_coord.x):
+        for y, x in zip(range(from_coord.y, to_coord.y, -1 if from_coord.y > to_coord.y else 1), 
+          range(from_coord.x, to_coord.x, -1 if from_coord.x > to_coord.x else 1)):
           if not board.empty_in(Coord(y, x)) and y != from_coord.y:
             return False, "Your Queen bumped into an impenetrable wall!"
 
@@ -386,7 +389,7 @@ class Chessboard:
     # Double check using last_move
     if (self.is_double_check()):
       king_coords = self.w_king_coords if color == 'w' else self.b_king_coords
-      king = self.get_piece(king_coords)
+      king = self.piece_in(king_coords)
 
       for valid_move in king.valid_moves((king_coords)):
         position = self.make_move(valid_move)
@@ -398,11 +401,11 @@ class Chessboard:
     else:
       for y in range(8):
         for x in range(8):
-          piece = self.get_piece((y, x))
+          piece = self.piece_in(Coord(y, x))
           if type(piece) == Empty: continue
           if piece.color != color: continue
 
-          for valid_move in piece.valid_moves((y, x)):
+          for valid_move in piece.valid_moves(self, Coord(y, x)):
             position = self.make_move(valid_move)
             
             if not position.is_check():
@@ -456,20 +459,26 @@ class Chessboard:
     aggregate_value = 0
     
     # Static piece value evaluations
-    for piece_type, quantity in self.inventory.items():
+    for piece_type, quantity in self.inventory['w'].items():
       aggregate_value += PIECE_VALUE[piece_type]
 
+    for piece_type, quantity in self.inventory['b'].items():
+      aggregate_value -= PIECE_VALUE[piece_type]
+
     # Bishop pair bonus
-    if self.inventory[Bishop] == 2:
+    if self.inventory['w'][Bishop] == 2:
       aggregate_value += PIECE_VALUE['BISHOP_PAIR_BONUS']
+
+    if self.inventory['b'][Bishop] == 2:
+      aggregate_value -= PIECE_VALUE['BISHOP_PAIR_BONUS']
 
     # Positional value evaluations
     for y in range(8):
       for x in range(8): 
-        if (self.empty_in((y,x))):
+        if (self.empty_in(Coord(y,x))):
           continue
         
-        piece = self.piece_in((y, x))
+        piece = self.piece_in(Coord(y, x))
 
         # White maximizes
         if (piece.color == 'w'):
@@ -497,7 +506,7 @@ class Chessboard:
     
     # Attack move
     else:
-      self.inventory[type(new_position.piece_in(move.to_coord))] -= 1
+      self.inventory[new_position.piece_in(move.to_coord).color][type(new_position.piece_in(move.to_coord))] -= 1
       new_position.board[move.to_coord.y][move.to_coord.x] = \
       new_position.board[move.from_coord.y][move.from_coord.x]
       new_position.board[move.from_coord.y][move.from_coord.x] = Empty()
