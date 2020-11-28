@@ -53,7 +53,7 @@ PIECE_VALUE = {
   Rook: 500,
   Queen: 975,
   King: 400,
-  'BISHOP_PAIR_BONUS': 0.5, 
+  'BISHOP_PAIR_BONUS': 50, 
 }
 
 # Based on: https://github.com/emdio/secondchess/blob/master/secondchess.c,
@@ -123,17 +123,29 @@ PIECE_SQUARE_TABLES = {
 }
 
 class Chessboard:
-  NO_BLACK_CHECK = set()
-  NO_WHITE_CHECK = set()
+  safe_positions = {
+    'b': set(),
+    'w': set(),
+  }
+  no_checkmate_positions = {
+    'b': set(),
+    'w': set(),
+  }
+  checkmate_positions = {
+    'b': set(),
+    'w': set(),
+  }
+  evaluated_positions = {}
 
   def __init__(self, last_move: Move=None):
     self.board = INITIAL_BOARD
     self.inventory = INITIAL_INVENTORY
     self.king_coords = {
-      'w': Coord(7, 3),
+      'w': Coord(7, 4),
       'b': Coord(0, 4)
     }
     self.last_move = None
+    self.hash = hash(self)
 
   def __hash__(self):
     tup = tuple()
@@ -167,14 +179,14 @@ class Chessboard:
   By default, black is rendered on top, white on bottom.
   Toggle vertical_flip to reverse this.
   """
-  def print_board(self, last_move: Move, vertical_flip: bool=False):
+  def print_board(self, vertical_flip: bool=False):
     res = ""
 
     start, end, step = 0, 8, 1
-    if (vertical_flip):
+    if vertical_flip:
       start, end, step = 7, -1, -1
     
-    if (last_move is None): 
+    if self.last_move is None: 
       for y in range(start, end, step):
         for x in range(start, end, step):
             res += f"{self.board[y][x]} "
@@ -183,9 +195,9 @@ class Chessboard:
     else:
       for y in range(start, end, step):
         for x in range(start, end, step):
-          if Coord(y, x) == last_move.from_coord:
+          if Coord(y, x) == self.last_move.from_coord:
             res += f"{Ccolor.OKBLUE}{self.board[y][x]}{Ccolor.ENDC} "
-          elif Coord(y, x) == last_move.to_coord:
+          elif Coord(y, x) == self.last_move.to_coord:
             res += f"{Ccolor.WARNING}{self.board[y][x]}{Ccolor.ENDC} "
           else:
             res += f"{self.board[y][x]} "
@@ -240,13 +252,11 @@ class Chessboard:
 
   Last move was legal if it does not place P King under a check.
   """
-  def is_check(self, color):
-
-    # Check our transposition sets if this current position has been considered
-    if (hash(self) in self.known_to_be_safe(color)):
-      return False
-    
+  def is_check(self, color):    
     k_y, k_x = self.king_coords[color].y, self.king_coords[color].x
+
+    if self.hash in self.known_to_be_safe(color):
+      return False
 
     if color == 'w':
       # King y and King x. Just to save us time and space indexing throughout this func
@@ -369,15 +379,17 @@ class Chessboard:
 
     # Not threatened by king.
 
-    # The function hasn't returned thus far. This means that the board
-    # is safe
-    self.known_to_be_safe(color).add(hash(self))
+    # The function hasn't returned thus far. This means the board
+    # is safe.
+    self.known_to_be_safe(color).add(self.hash)
+
+    return False
 
   def known_to_be_safe(self, color):
     if color == 'w':
-      return self.NO_WHITE_CHECK
+      return self.safe_positions[color]
     else: # color == 'b'
-      return self.NO_BLACK_CHECK
+      return self.safe_positions[color]
 
   """
   Called before the searches further down the game tree.
@@ -389,6 +401,9 @@ class Chessboard:
   # def is_double_check(self, last_move):
 
   def evaluate(self):
+    if self.hash in self.evaluated_positions:
+      return self.evaluated_positions[self.hash]
+
     aggregate_value = 0
     
     # Static piece value evaluations
@@ -408,13 +423,13 @@ class Chessboard:
     # Positional value evaluations
     for y in range(8):
       for x in range(8): 
-        if (self.empty_in(Coord(y,x))):
+        if self.empty_in(Coord(y,x)):
           continue
         
         piece = self.piece_in(Coord(y, x))
 
         # White maximizes
-        if (piece.color == 'w'):
+        if piece.color == 'w':
           aggregate_value += PIECE_SQUARE_TABLES[type(piece)][y][x]
 
         # Black minimizes
@@ -423,6 +438,9 @@ class Chessboard:
           # If Black's pawn is in (4, 3) for example, we should index into
           # PST[Pawn][3][3] == 15, not PST[Pawn][4][3] == 10.
           aggregate_value -= PIECE_SQUARE_TABLES[type(piece)][abs(y - 7)][x]
+
+    # Memoize the result of the evaluation
+    self.evaluated_positions[self.hash] = aggregate_value
 
     return aggregate_value
       
@@ -439,7 +457,7 @@ class Chessboard:
     
     # Attack move
     else:
-      self.inventory[new_chessboard.piece_in(move.to_coord).color][type(new_chessboard.piece_in(move.to_coord))] -= 1
+      new_chessboard.inventory[new_chessboard.piece_in(move.to_coord).color][type(new_chessboard.piece_in(move.to_coord))] -= 1
       new_chessboard.board[move.to_coord.y][move.to_coord.x] = \
       new_chessboard.board[move.from_coord.y][move.from_coord.x]
       new_chessboard.board[move.from_coord.y][move.from_coord.x] = Empty()
@@ -450,10 +468,22 @@ class Chessboard:
     if (type(moved) is King):
       new_chessboard.king_coords[moved.color] = move.to_coord
 
+    # Update the hash of the new chessboard
+    new_chessboard.hash = hash(new_chessboard)
+
     return new_chessboard
 
-  """
-  TODO: Decide whether game has ended.
-  """
-  def is_checkmate(self, cur_color):
-    return self.legal_positions(cur_color) == []
+  def is_checkmate(self, color):
+    if self.hash in self.checkmate_positions:
+      return True
+
+    if self.hash in self.no_checkmate_positions:
+      return False
+
+    if self.legal_positions(color) == []:
+      self.checkmate_positions[color].add(self.hash)
+      return True
+    
+    else:
+      self.no_checkmate_positions[color].add(self.hash)
+      return False

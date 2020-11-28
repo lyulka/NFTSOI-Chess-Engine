@@ -3,6 +3,9 @@ from coord import Coord
 from move import Move
 from test import dynamic_move_test
 
+import multiprocessing as mp
+import time
+
 LONGFORM_COLOR = {
   'w': 'White',
   'b': 'Black'
@@ -12,6 +15,18 @@ class AI:
   def __init__(self, color: str):
     self.color = color
 
+  def get_best_position_ID(self, board: Chessboard, color, return_queue: mp.Queue):
+
+    depth_limit = 0
+    
+    while True:
+      depth_limit += 1
+      print(f"Depth limit = {depth_limit}")
+      score, best_position = self.get_best_position(board, color, 0, depth_limit)
+      return_queue.put([score, best_position])
+
+    return
+    
   """
   Minimax algorithm with Alpha-Beta Pruning.
 
@@ -19,16 +34,18 @@ class AI:
   Black is the minimizer. 
   """
   def get_best_position(self, board: Chessboard, color,
-    depth: int=0, alpha: float=float("-inf"), beta: float=float("+inf")):
-    if depth == 4: # Depth limit ADD CHECKMATE DETECTION
+    depth: int, depth_limit: int, alpha: float=float("-inf"), beta: float=float("+inf")):
+
+    if depth == depth_limit:
       return board.evaluate(), None
+
     else:
 
       if color == "w":
         best_position = None
         for candidate in board.legal_positions(color):
           score, _ = self.get_best_position(candidate, "b",
-            depth + 1, alpha, beta)
+            depth + 1, depth_limit, alpha, beta)
           
           # Move that Black would take in response to this move has higher
           # score than the previous score assured for White.
@@ -37,20 +54,18 @@ class AI:
             best_position = candidate
 
             # Alpha-Beta cutoff. The maximum score assured to Black is
-            # less than the minimum score assured to White. A minimizing
-            # Black will never go down this (upper) branch. It'll just
-            # go down the maximum (beta) guaranteed branch assured to
-            # it.
+            # less than the minimum score assured to White. Black will
+            # never allow white to reach this position.
             if alpha >= beta:
               break
         
         return (alpha, best_position)
 
-      else: # color:
+      else: # color: 'b'
         best_position = None
         for candidate in board.legal_positions(color):
           score, _ = self.get_best_position(candidate, "w",
-            depth + 1, alpha, beta)
+            depth + 1, depth_limit, alpha, beta)
 
           # Move that White would take in response to this move has lower
           # score than the previous score assured for Black.
@@ -59,9 +74,7 @@ class AI:
             best_position = candidate
 
             # Alpha-Beta cutoff. The minimum score assured to White is
-            # more than the maximum score assured to Black. A minimizing
-            # White will never go down this (upper) branch. It'll just
-            # go down the minimum (alpha) guaranteed branch assured to it.
+            # more than the maximum score assured to Black.
             if alpha >= beta:
               break
 
@@ -70,19 +83,41 @@ class AI:
 class Game:
   def __init__(self):
     self.board = Chessboard()
+    self.time_limit = 1
     self.human_color = None
     self.AI = None
-    
-    # Stores sequence of moves made from start to finish.
-    # self.moves[-1] is the latest move made so far, so
-    # the array is initialized to [None] (no moves made so
-    # far.)
-    self.moves = [None]
 
+  def config(self):
+    print("Prince's Chess (named after my dog!)")
+
+    while True:
+      print("### Game Configuration ###")
+
+      try:
+        self.time_limit = float((input("For how many seconds should the CPU player think? (in secs): ")))
+        if self.time_limit < 2:
+          print("Please enter a number greater than 2.")
+          continue
+
+        # A limitation of this program as it stands is that the human
+        # player MUST play white.
+        self.human_color = 'w'
+        self.AI = AI('b')
+        break
+
+      except KeyboardInterrupt:
+        print()
+        return
+
+      except:
+        print("You inputted a really, really weird value")
+        continue
+
+    self.start()
+        
   def start(self):
-    print("Prince's Chess v0.1")
-    self.human_color = input("Choose your color (B or W): ").lower()
-    self.AI = AI('w' if self.human_color == 'b' else 'b')
+    print("### Game START ###")
+    print("White: You, Black: CPU")
     
     # Render player's side at the bottom
     vertical_flip = self.human_color == 'b'
@@ -92,7 +127,7 @@ class Game:
       #
       # PLAYER'S TURN
       #
-      self.board.print_board(self.moves[-1], vertical_flip=vertical_flip)
+      self.board.print_board(vertical_flip=vertical_flip)
 
       print("Enter a move")
       from_square = input("Piece: ").lower()
@@ -107,8 +142,9 @@ class Game:
       to_coord = Coord(a_n=to_square)
       move = Move(from_coord, to_coord)
 
-      dynamic_move_test(self.board, self.board.piece_in(from_coord), 
-        self.human_color, from_coord)
+      # FOR MOVE GENERATOR DEBUGGING #
+      # dynamic_move_test(self.board, self.board.piece_in(from_coord), 
+      #   self.human_color, from_coord)
 
       is_valid = Move.is_valid(self.board, self.human_color, move)
 
@@ -123,25 +159,44 @@ class Game:
         print("That was an illegal move.")
         continue
       
-      self.moves.append(move)
       self.board = new_position
 
       if self.board.is_checkmate(self.AI.color):
         print(f"{LONGFORM_COLOR[self.human_color]} Wins! You win!")
-        break
+        return
+
+      self.board.print_board(vertical_flip=vertical_flip)
 
       #
       # AI's TURN
       #
-      self.board.print_board(self.moves[-1], vertical_flip=vertical_flip)
-      print("AI is thinking...")
+      print("CPU is thinking...")
 
-      score, position = self.AI.get_best_position(self.board, self.AI.color, 0)
-      print(f"score: {score}")
-      self.board = position
+      return_queue = mp.Queue()
+      ID_worker = mp.Process(target=self.AI.get_best_position_ID,
+        args=(self.board, self.AI.color, return_queue))
+      ID_worker.start()
 
-      if self.board == None or self.board.is_checkmate(self.human_color):
-        print(f"{LONGFORM_COLOR[self.AI]} Wins! AI wins!")
+      start = time.perf_counter()
+
+      time.sleep(self.time_limit)
+      ID_worker.terminate()
+
+      end = time.perf_counter()
+
+      depth_achieved = 0
+      while not return_queue.empty():
+        depth_achieved += 1
+        score, best_position = return_queue.get()
+      
+      print(f"Achieved depth {depth_achieved} in {end - start:.1f} seconds with Iterative Deepening")
+      print(f"Score: {score}")
+
+      self.board = best_position
+
+      if self.board is None or self.board.is_checkmate(self.human_color):
+        print(f"{LONGFORM_COLOR[self.AI.color]} Wins! AI wins!")
+        return
 
 g = Game()
-g.start()
+g.config()
