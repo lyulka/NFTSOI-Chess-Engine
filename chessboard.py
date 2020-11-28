@@ -22,7 +22,7 @@ INITIAL_BOARD = [
   [Empty(),     Empty(),     Empty(),     Empty(),     Empty(),     Empty(),     Empty(),     Empty()  ],
   [Empty(),     Empty(),     Empty(),     Empty(),     Empty(),     Empty(),     Empty(),     Empty()  ],
   [Pawn('w'),   Pawn('w'),   Pawn('w'),   Pawn('w'),   Pawn('w'),   Pawn('w'),   Pawn('w'),   Pawn('w')],
-  [Rook('w'),   Knight('w'), Bishop('w'), King('w'),   Queen('w'),  Bishop('w'), Knight('w'), Rook('w')],
+  [Rook('w'),   Knight('w'), Bishop('w'), Queen('w'),  King('w'),  Bishop('w'), Knight('w'), Rook('w')],
 ]
 
 INITIAL_INVENTORY = {
@@ -123,7 +123,8 @@ PIECE_SQUARE_TABLES = {
 }
 
 class Chessboard:
-  transpositions = {}
+  NO_BLACK_CHECK = set()
+  NO_WHITE_CHECK = set()
 
   def __init__(self, last_move: Move=None):
     self.board = INITIAL_BOARD
@@ -134,15 +135,31 @@ class Chessboard:
     }
     self.last_move = None
 
+  def __hash__(self):
+    tup = tuple()
+    for row in self.board:
+      tup_of_str = tuple()
+      for piece in row:
+        tup_of_str += tuple(piece.__str__())
+      tup += tup_of_str
+    
+    return hash(tup)
+
   def piece_in(self, coord: Coord):
     return self.board[coord.y][coord.x]
 
   def empty_in(self, coord: Coord):
     return type(self.board[coord.y][coord.x]) == Empty
 
+  def friend_in(self, color, coord: Coord):
+    if self.empty_in(coord):
+      return False
+
+    return self.piece_in(coord).color == color
+
   def enemy_in(self, color, coord: Coord):
     if self.empty_in(coord):
-      return
+      return False
 
     return self.piece_in(coord).color != color
 
@@ -181,8 +198,6 @@ class Chessboard:
     print(res)
 
   """
-  TODO: Legal successor positions generator.
-
   The flow of a single game tree node expansion looks like this:
   - is_double_check?
   - generate pseudolegal moves & positions.
@@ -190,7 +205,7 @@ class Chessboard:
   - Yes -> make_move
   - recurse.
   """
-  def legal_moves(self, color: str):
+  def legal_positions(self, color: str):
     res = [] # Resultant moves[]
 
     # Double check using last_move
@@ -213,9 +228,9 @@ class Chessboard:
 
         for move in piece.valid_moves(self, Coord(y, x)):
           chessboard = self.make_move(move)
-          
+
           if not chessboard.is_check(color):
-            res.append(move)
+            res.append(chessboard)
 
     return res
           
@@ -226,6 +241,11 @@ class Chessboard:
   Last move was legal if it does not place P King under a check.
   """
   def is_check(self, color):
+
+    # Check our transposition sets if this current position has been considered
+    if (hash(self) in self.known_to_be_safe(color)):
+      return False
+    
     k_y, k_x = self.king_coords[color].y, self.king_coords[color].x
 
     if color == 'w':
@@ -242,7 +262,7 @@ class Chessboard:
         if (Coord.is_in_bounds(t_y, t_x)
           and self.enemy_in(color, Coord(t_y, t_x))
           and type(self.piece_in(Coord(t_y, t_x))) in (Pawn, Bishop, Queen)):
-            return True      
+            return True
 
     else:
 
@@ -256,8 +276,6 @@ class Chessboard:
           and self.enemy_in(color, Coord(t_y, t_x))
           and type(self.piece_in(Coord(t_y, t_x))) in (Pawn, Bishop, Queen)):
           return True
-
-    # Not threatened by pawn.
 
 
     # Replace P King with P Knight.
@@ -277,8 +295,6 @@ class Chessboard:
         and self.enemy_in(color, Coord(t_y, t_x))
         and type(self.piece_in(Coord(t_y, t_x))) is Knight):
         return True
-
-    # Not threatened by knight.
 
     # Replace P King with P Bishop: Generate all moves for P Bishop.
     # If move causes Bishop to take: E Queen or E Bishop, return False.
@@ -300,11 +316,12 @@ class Chessboard:
 
         t_c = Coord(t_y, t_x)
 
+        if self.friend_in(color, t_c):
+          break
+
         if (self.enemy_in(color, t_c)
           and type(self.piece_in(t_c)) in (Queen, Bishop)):
-          return False
-
-    # Not threatened by bishop.
+          return True
 
     # Replace P King with P Rook: Generate all moves for P Rook.
     # If move causes Rook to take: E Queen or E Rook, return False.
@@ -325,11 +342,12 @@ class Chessboard:
 
         t_c = Coord(t_y, t_x)
 
+        if self.friend_in(color, t_c):
+          break
+
         if (self.enemy_in(color, t_c)
           and type(self.piece_in(t_c)) in (Queen, Rook)):
-          return False
-
-    # Not threatened by rook or queen.
+          return True
 
     # Replace P King: Generate all moves for P King.
     # If more causes King to take: E King, return False.
@@ -350,6 +368,16 @@ class Chessboard:
         return True
 
     # Not threatened by king.
+
+    # The function hasn't returned thus far. This means that the board
+    # is safe
+    self.known_to_be_safe(color).add(hash(self))
+
+  def known_to_be_safe(self, color):
+    if color == 'w':
+      return self.NO_WHITE_CHECK
+    else: # color == 'b'
+      return self.NO_BLACK_CHECK
 
   """
   Called before the searches further down the game tree.
@@ -428,4 +456,4 @@ class Chessboard:
   TODO: Decide whether game has ended.
   """
   def is_checkmate(self, cur_color):
-    return self.legal_moves(cur_color) == []
+    return self.legal_positions(cur_color) == []

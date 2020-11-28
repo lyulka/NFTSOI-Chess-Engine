@@ -18,56 +18,54 @@ class AI:
   White is the maximizer.
   Black is the minimizer. 
   """
-  def get_best_move(self, board: Chessboard, color,
+  def get_best_position(self, board: Chessboard, color,
     depth: int=0, alpha: float=float("-inf"), beta: float=float("+inf")):
-    if depth == 4: # Depth limit
+    if depth == 4: # Depth limit ADD CHECKMATE DETECTION
       return board.evaluate(), None
     else:
 
       if color == "w":
-        best_move = None
-        for move in board.legal_moves(color):
-          successor_position = board.make_move(move)
-          score, _ = self.get_best_move(successor_position, "b",
+        best_position = None
+        for candidate in board.legal_positions(color):
+          score, _ = self.get_best_position(candidate, "b",
             depth + 1, alpha, beta)
           
           # Move that Black would take in response to this move has higher
           # score than the previous score assured for White.
           if score > alpha:
             alpha = score
-            best_move = move
+            best_position = candidate
 
             # Alpha-Beta cutoff. The maximum score assured to Black is
             # less than the minimum score assured to White. A minimizing
             # Black will never go down this (upper) branch. It'll just
             # go down the maximum (beta) guaranteed branch assured to
             # it.
-            if beta < alpha:
+            if alpha >= beta:
               break
         
-        return (alpha, best_move)
+        return (alpha, best_position)
 
       else: # color:
-        best_move = None
-        for move in board.legal_moves(color):
-          successor_position = board.make_move(move)
-          score, _ = self.get_best_move(successor_position, "w",
+        best_position = None
+        for candidate in board.legal_positions(color):
+          score, _ = self.get_best_position(candidate, "w",
             depth + 1, alpha, beta)
 
           # Move that White would take in response to this move has lower
           # score than the previous score assured for Black.
           if score < beta:
             beta = score
-            best_move = move
+            best_position = candidate
 
             # Alpha-Beta cutoff. The minimum score assured to White is
             # more than the maximum score assured to Black. A minimizing
             # White will never go down this (upper) branch. It'll just
             # go down the minimum (alpha) guaranteed branch assured to it.
-            if alpha > beta:
+            if alpha >= beta:
               break
 
-        return (beta, best_move)
+        return (beta, best_position)
 
 class Game:
   def __init__(self):
@@ -138,12 +136,11 @@ class Game:
       self.board.print_board(self.moves[-1], vertical_flip=vertical_flip)
       print("AI is thinking...")
 
-      _, move = self.AI.get_best_move(self.board, self.AI.color, 0)
-      print(move)
-      self.board = self.board.make_move(move)
+      score, position = self.AI.get_best_position(self.board, self.AI.color, 0)
+      print(f"score: {score}")
+      self.board = position
 
-
-      if self.board.is_checkmate(self.human_color):
+      if self.board == None or self.board.is_checkmate(self.human_color):
         print(f"{LONGFORM_COLOR[self.AI]} Wins! AI wins!")
 
 g = Game()
